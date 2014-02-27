@@ -3,12 +3,12 @@ Contributors: shawneggplantstudiosca
 Donate link: none
 Tags: 301 redirects, redirects
 Requires at least: 3.0.1
-Tested up to: 3.5
-Stable tag: 1.4.0
+Tested up to: 3.8.1
+Stable tag: 2.0.1
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
-Easily manage and create 301 redirects for your Wordpress website. A robust interface allows you create and validate redirecs.
+Easily manage and create 301 redirects for your Wordpress website. A robust interface allows you create and validate redirects.
 
 == Description ==
 
@@ -24,11 +24,13 @@ A 301 redirect indicates that the page requested has been permanently moved to t
 **When Should I use EPS 301 Redirects?** 
 1. Replacing an old site design with a new site design
 1. Overhauling or re-organizing your existing Wordpress content
+1. You have content that expires (or is otherwise no longer available) and you wish to redirect users elsewhere.
 
 
 **Features** 
 * Choose from Pages, Posts, Custom Post types, Archives, Term Archives, 
-* Overhauling or re-organizing your existing Wordpress content
+* Creates its own database table, for faster indexing
+
 
 
 
@@ -50,9 +52,14 @@ Created by Shawn Wernig [Eggplant Studios](http://www.eggplantstudios.ca/ "Eggpl
 
 == Frequently Asked Questions ==
 
+= I'm getting an error about the default permalink structure? =
+
+EPS 301 Redirects requires that you use anything but the default permalink structure. 
+
+
 = My redirects aren't working =
 
-This could be caused by many things, but please ensure that you are supplying valid URLs. If you're sure everything should be working, check the status code for the failing redirects, are both statuses marked Green?
+This could be caused by many things, but please ensure that you are supplying valid URLs. Most common are extra spaces, spelling mistakes and invalid characters.
 
 
 = My redirects aren't getting the 301 status code =
@@ -75,6 +82,12 @@ Click the small X beside the redirect you wish to remove. Save changes.
 3. The redirect testing feature. 
 
 == Changelog ==
+
+= 2.0.1 =
+Fixed an issue where the Automatic Update would not call the import process for pre 2.0 versions.
+
+= 2.0.0 =
+Overhauled the entire plugin. Redirects are stored in their own table. Gracefully migrates older versions.
 
 = 1.4.0 =
 * Performance updates, added a new 'Settings' page.
@@ -107,6 +120,12 @@ Click the small X beside the redirect you wish to remove. Save changes.
 * Release.
 
 == Upgrade Notice ==
+
+= 2.0.1 =
+Fixed an issue where the Automatic Update would not call the import process for pre 2.0 versions.
+
+= 2.0.0 =
+Overhauled the entire plugin. Redirects are stored in their own table. Gracefully migrates older versions.
 
 = 1.4.0 =
 * Performance updates, added a new 'Settings' page.

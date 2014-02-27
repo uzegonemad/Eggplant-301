@@ -15,15 +15,17 @@
  *
  * @package    EPS 301 Redirects
  * @author     Shawn Wernig ( shawn@eggplantstudios.ca )
- * @version    1.4.0
+ * @version    2.0.1
  */
 
+
+    
  
 /*
 Plugin Name: Eggplant 301 Redirects
 Plugin URI: http://www.eggplantstudios.ca
 Description: Create your own 301 redirects using this powerful plugin.
-Version: 1.4.0
+Version: 2.0.1
 Author: Shawn Wernig http://www.eggplantstudios.ca
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
@@ -31,11 +33,13 @@ License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
 define ( 'EPS_REDIRECT_PATH', plugin_dir_path(__FILE__) );
 define ( 'EPS_REDIRECT_URL', plugin_dir_url( __FILE__ ) );
-define ( 'EPS_REDIRECT_VERSION', '1.4.0');
+define ( 'EPS_REDIRECT_VERSION', '2.0.1');
 
 register_activation_hook(__FILE__, array('EPS_Redirects', 'eps_redirect_activation'));
 register_deactivation_hook(__FILE__, array('EPS_Redirects', 'eps_redirect_deactivation'));
 
+include(EPS_REDIRECT_PATH.'eps-form-elements.php');  
+include(EPS_REDIRECT_PATH.'class.drop-down-pages.php');
 
 class EPS_Redirects {
     
@@ -45,61 +49,135 @@ class EPS_Redirects {
     static $page_title = '301 Redirects';
 
 
+
+    /**
+     * 
+     * Constructor
+     * 
+     * Add some actions.
+     * 
+     */
     public function __construct(){
         if(is_admin()){
+            add_action('activated_plugin', array($this,'activation_error'));
             add_action('admin_menu', array($this, 'add_plugin_page'));
             add_action('admin_init', array($this, '_save'));
-            add_action('wp_ajax_eps_redirect_get_new_entry',  array($this, 'ajax_get_blank_entry') ); 
             add_action('init', array($this, 'enqueue_resources'));
             add_action('admin_footer_text',  array($this, 'set_ajax_url'));
+            
+            // Ajax funcs
+            add_action('wp_ajax_eps_redirect_get_new_entry',  array($this, 'ajax_get_blank_entry') ); 
+            add_action('wp_ajax_eps_redirect_delete_entry',  array($this, 'ajax_eps_delete_entry') );
+            
+            if( isset($_GET['page']) && $_GET['page'] == self::$page_slug) {
+                add_action('admin_init', array($this, 'clear_cache'));
+            }
+        } else {
+            add_action('init', array($this,'do_redirect'), 1); // Priority 1 for redirects.
         }
-        add_action('wp_footer',  array($this, 'set_ajax_url'));
-        add_action('init', array($this,'do_redirect'), 1); // Priority 1 for redirects.
+        
+        if ( !self::is_current_version() )  self::update_self();
+        
     }
     
+    /**
+     * 
+     * 
+     * Activation and Deactivation Handlers.
+     * 
+     * @return nothing
+     * @author epstudios
+     */
     public static function eps_redirect_activation() {
-            self::check_version();
+            self::update_self();
     }
     public static function eps_redirect_deactivation() {
-            //update_option( self::$option_slug, null );
-            //update_option( 'eps_redirects_version', null );        
     }
     
-    
+    function is_current_version(){
+        $version = get_option( 'eps_redirects_version' );
+        return version_compare($version, EPS_REDIRECT_VERSION, '=') ? true : false;
+    }
+
      /**
      * 
      * CHECK VERSION
      * 
      * This function will check the current version and do any fixes required
      * 
-     * @return html string
+     * @return string - version number.
      * @author epstudios
      *      
      */
-    public function check_version() {
+    public function update_self() {
         $version = get_option( 'eps_redirects_version' );
-        
-        if ( !isset($version) || empty( $version ) ) {
-            // no version is set. versions started being stored at 1.3.1
-            // because in 1.3.1 we did a big database storage change, we need to fix old versions storage
+        self::_create_tables(); // Maybe create the tables 
 
-            $redirects = get_option( self::$option_slug );
-            if (empty($redirects)) return false; // no redirects anyways, so dont do anything.
-
-            foreach ($redirects as $to => $from ) {
-                $new_redirects[$from] = $to;
-            }
-            update_option( self::$option_slug, $new_redirects );
-        }
+        if( version_compare($version, '2.0.0', '<')) {
+            // migrate old format to new format.
+            self::_migrate_to_v2();
+        } 
         
-        switch( $version ) {
-            case '1.3.2':
-                // do stuff
-            default:
-                break;   
-        }
         update_option( 'eps_redirects_version', EPS_REDIRECT_VERSION );
         return EPS_REDIRECT_VERSION;
+    }
+    
+    /**
+     * 
+     * 
+     * MIGRATE TO V2
+     * 
+     * Will migrate the old storage method to the new tables.
+     * 
+     */
+    public function _migrate_to_v2() {
+        $redirects = get_option( self::$option_slug );
+        if (empty($redirects)) return false; // No redirects to migrate.
+        
+        $new_redirects = array();
+
+        foreach ($redirects as $from => $to ) {
+             $new_redirects[] = array(
+                    'id'        => false,
+                    'url_to'    => urldecode($to),
+                    'url_from'  => $from,
+                    'type'    => 'url',
+                    'status'    => '301'
+                );       
+        }
+
+        self::_save_redirects( $new_redirects );
+            
+        //update_option( self::$option_slug, null );
+    }
+    
+    /**
+     * 
+     * CREATE TABLES
+     * 
+     * Creates the new database architecture
+     * 
+     * @return nothing
+     * @author epstudios
+     * 
+     */
+    private function _create_tables() {
+       global $wpdb;
+    
+       $table_name = $wpdb->prefix . "redirects";
+          
+       $sql = "CREATE TABLE $table_name (
+          id mediumint(9) NOT NULL AUTO_INCREMENT,
+          url_from VARCHAR(256) DEFAULT '' NOT NULL,
+          url_to VARCHAR(256) DEFAULT '' NOT NULL,
+          status VARCHAR(12) DEFAULT '301' NOT NULL,
+          type VARCHAR(12) DEFAULT 'url' NOT NULL,
+          count mediumint(9) DEFAULT 0 NOT NULL,
+          UNIQUE KEY id (id)
+       );";
+    
+       require_once( ABSPATH . 'wp-admin/includes/upgrade.php' );
+       dbDelta( $sql );
     }
     
     
@@ -115,7 +193,7 @@ class EPS_Redirects {
      */
     public function enqueue_resources(){
         wp_enqueue_script('jquery');
-        wp_enqueue_script('eps_redirect_script', EPS_REDIRECT_URL .'/js/scripts.js');
+        wp_enqueue_script('eps_redirect_script', EPS_REDIRECT_URL .'js/scripts.js');
         wp_enqueue_style('eps_redirect_styles', EPS_REDIRECT_URL .'css/eps_redirect.css');
     }
     
@@ -143,36 +221,49 @@ class EPS_Redirects {
      *      
      */
     public function do_redirect() {
-        $redirects = get_option( self::$option_slug );
-        if (empty($redirects)) return false;
-            
+        
+        $redirects = self::get_redirects( true ); // True for only active redirects.
+        if (empty($redirects)) return false; // No redirects.
+        
         // Get current url
         $url_request = self::get_url();
 
-        foreach ($redirects as $from => $to ) {
-            $from = urldecode($from);
-            $to = urldecode($to);
-            
-            if( rtrim($url_request,'/') == self::format_from_url($from) ) {
-                // Match, this needs to be redirected
-                header ('HTTP/1.1 301 Moved Permanently');
-                header ('Location: ' . $to, true, 301);
-                exit();
-            } 
+        foreach ($redirects as $redirect ) {
+            $from = urldecode( $redirect->url_from );
+            $to   = ($redirect->type == "url" && !is_numeric( $redirect->url_to )) ? urldecode($redirect->url_to) : get_permalink( $redirect->url_to );
+                                
+                if( $redirect->status != 'inactive' && rtrim( trim($url_request),'/')  === self::format_from_url( trim($from) )  ) {
+                    // Match, this needs to be redirected
+                    //increment this hit counter.
+                    self::increment_field($redirect->id, 'count');
+                    
+                    if( $redirect->status == '301' ) {
+                        header ('HTTP/1.1 301 Moved Permanently');
+                    } elseif ( $redirect->status == '302' ) {
+                        header ('HTTP/1.1 301 Moved Temporarily');
+                    }
+                    header ('Location: ' . $to, true, (int) $redirect->status); 
+                    exit();
+                }
+                
         }
     }
-    private function rawurlencode_parts( $uri ) {
-            $parts = explode('/', $uri);
-            for ($i = 0; $i < count($parts); $i++) {
-              $parts[$i] = rawurlencode($parts[$i]);
-            }
-            return implode('/', $parts);
+
+    /**
+     * 
+     * FORMAT FROM URL
+     * 
+     * Will construct and format the from url from what we have in storage.
+     * 
+     * @return url string
+     * @author epstudios
+     * 
+     */
+    private function format_from_url( $string ) {
+        $from = home_url() . '/' . $string;
+        return strtolower( rtrim( $from,'/') );    
     }
     
-    private function format_from_url( $string ) {
-        $from = get_option('home') . '/' . $string;
-        return rtrim($from,'/');    
-    }
     /**
      * 
      * GET_URL
@@ -185,7 +276,7 @@ class EPS_Redirects {
      */
     function get_url() {
         $protocol = ( isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] == 'on' ) ? 'https' : 'http';
-        return urldecode( $protocol . '://' . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'] );
+        return strtolower( urldecode( $protocol . '://' . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'] ) );
     }
         
         
@@ -206,7 +297,7 @@ class EPS_Redirects {
      * 
      * _SAVE
      * 
-     * This function will list out all the current entries.
+     * This function handles various POST requests.
      * 
      * @return html string
      * @author epstudios
@@ -214,37 +305,128 @@ class EPS_Redirects {
      */
     public function _save(){
        
-        if ( isset( $_POST['eps_redirect_submit'] ) && wp_verify_nonce( $_POST['eps_redirect_nonce_submit'], 'eps_redirect_nonce') ) 
-             $this->_save_redirects();
+       // Refresh the Transient Cache
+       if ( isset( $_POST['eps_redirect_refresh'] ) && wp_verify_nonce( $_POST['eps_redirect_nonce_submit'], 'eps_redirect_nonce') )  {
+           $post_types = get_post_types(array('public'=>true), 'objects');
+            foreach ($post_types as $post_type ) {
+                $options = eps_dropdown_pages( array('post_type'=>$post_type->name ) );
+                set_transient( 'post_type_cache_'.$post_type->name, $options, HOUR_IN_SECONDS );
+           }
+       }
+       
+       // Save Redirects
+       if ( isset( $_POST['eps_redirect_submit'] ) && wp_verify_nonce( $_POST['eps_redirect_nonce_submit'], 'eps_redirect_nonce') ) 
+            $this->_save_redirects( self::_parse_serial_array($_POST['redirect']) );
 
-       if ( isset( $_POST['eps_redirect_settings_submit'] ) && wp_verify_nonce( $_POST['eps_redirect_setting_nonce_submit'], 'eps_redirect_setting_nonce') )
-            $this->_save_settings();
     }
     
-    private function _save_settings() {
-        update_option( 'eps_redirect_settings', $_POST['eps_redirect_settings'] );
+    /**
+     * 
+     * PARSE SERIAL ARRAY
+     * 
+     * A necessary data parser to change the POST arrays into save-able data.
+     * 
+     * @return array of redirects
+     * @author epstudios
+     * 
+     */
+    private function _parse_serial_array( $array ){
+        $new_redirects = array();
+        $total = count( $array['url_from'] );
+        
+        for( $i = 0; $i < $total; $i ++ ) {
+            
+            if( empty( $array['url_to'][$i]) || empty( $array['url_from'][$i] ) ) continue;
+            $new_redirects[] = array(
+                    'id'        => isset( $array['id'][$i] ) ? $array['id'][$i] : null,
+                    'url_from'  => $array['url_from'][$i],
+                    'url_to'    => $array['url_to'][$i],
+                    'type'      => ( is_numeric($array['url_to'][$i]) ) ? 'post' : 'url',
+                    'status'    => isset( $array['status'][$i] ) ? $array['status'][$i] : 'active'
+                    ); 
+        }
+        return $new_redirects;
     }
-    private function _save_redirects() {
-       $total_redirects = count( $_POST[self::$option_slug]['to'] ); 
-       $redirects = array();
+    
+    /**
+     * 
+     * SAVE REDIRECTS
+     * 
+     * Saves the array of redirects.
+     * 
+     * TODO: Maybe refactor this to reduce the number of queries.
+     * 
+     * @return nothing
+     * @author epstudios
+     */
+    private function _save_redirects( $array ) {
+       if( empty( $array ) ) return false;
+       global $wpdb;
+       $table_name = $wpdb->prefix . "redirects";
        
-       for($i = 0; $i < $total_redirects; $i ++) {
-            $to = trim(  $_POST[self::$option_slug]['to'][$i] );
-            $to = self::rawurlencode_parts( $to );
-            $to = filter_var( $to, FILTER_SANITIZE_URL);
+       foreach( $array as $redirect ) {
+            if( !$redirect['id'] || empty($redirect['id']) ) {
+                // new
+                $wpdb->insert( 
+                    $table_name, 
+                    array( 
+                        'url_from'      => trim( $redirect['url_from'] ),
+                        'url_to'        => trim( $redirect['url_to']),
+                        'type'          => trim( $redirect['type']),
+                        'status'        => trim( $redirect['status'])
+                    )
+                );
+
+            } else {
+                // existing
+                $wpdb->update( 
+                    $table_name, 
+                    array( 
+                        'url_from'  => trim( $redirect['url_from']),
+                        'url_to'    => trim( $redirect['url_to']),
+                        'type'      => trim( $redirect['type']), 
+                        'status'    => trim( $redirect['status'])
+                    ), 
+                    array( 'id' => $redirect['id'] )
+                );
+            }
             
-            $from = trim( $_POST[self::$option_slug]['from'][$i] );
-            $from = self::rawurlencode_parts( $from );
-            $from = filter_var( $from, FILTER_SANITIZE_URL);
-            $from = ltrim($from, '/');
-            
-            if( empty($to) ) $to = home_url() . '/'; // default
-            
-            // If this is a valid entry, add it to the save array.
-            if ( !empty($from)) $redirects[$from] = $to;
-       }
-       // If we then have a valid array - save
-       update_option( self::$option_slug, $redirects );
+        }
+        
+    }
+    /**
+     * GET REDIRECTS    
+     * 
+     * Gets the redirects. Can be switched to return Active Only redirects.
+     * 
+     * @return array of redirects
+     * @author epstudios
+     * 
+     */
+    public function get_redirects( $active_only = false ) {
+        global $wpdb;
+        $table_name = $wpdb->prefix . "redirects";
+        $results = $wpdb->get_results( 
+            "SELECT * FROM $table_name " . ( ( $active_only ) ? "WHERE status != 'inactive'" : null )
+        );
+        return $results;
+    }
+    
+    /**
+     * 
+     * INCREMENT FIELD
+     * 
+     * Add +1 to the specified field for a given id
+     * 
+     * @return the result
+     * @author epstudios
+     * 
+     */
+    public function increment_field( $id, $field ) {
+        global $wpdb;
+        $table_name = $wpdb->prefix . "redirects";
+        $results = $wpdb->query( "UPDATE $table_name SET $field = $field + 1 WHERE id = $id");
+        return $results;
     }
     
     /**
@@ -258,36 +440,41 @@ class EPS_Redirects {
      *      
      */
     public function do_inputs(){
-        $redirects = get_option( self::$option_slug );
-        
+        $redirects = self::get_redirects( );
+        $html = '';
         if (empty($redirects)) return false;
-        
-        foreach ($redirects as $from => $to ) {
-            $dfrom = urldecode($from);
-            $dto = urldecode($to);  
-            
-            
-                
-            $html .= '
-            <tr class="redirect-entry">
-                <td><span class="eps-grey-text">'.get_bloginfo('home').'/&nbsp;</span><input class="eps-request-url" type="text" name="'.self::$option_slug.'[from][]" value="'. $dfrom .'" > &rarr;</td>
-                <td>
-                    <input type="text" class="eps-redirect-url" name="'.self::$option_slug.'[to][]"  value="'.$dto.'" >';
-                    
-            $html .= $this->get_testing_results($from, $dto);      
-                    
-            $html .='<a class="eps-text-link" href="'.self::format_from_url( $from ).'" target="_blank">Test</a>
-                    <a class="eps-text-link remove" href="#" class="eps-redirect-remove">&times;</a>
-                </td>
-            </tr>';
+        ob_start();
+        foreach ($redirects as $redirect ) {           
+            $dfrom = urldecode($redirect->url_from);
+            $dto   = urldecode($redirect->url_to  );
+            include( EPS_REDIRECT_PATH . 'templates/template.redirect-entry.php');
         }
+        $html = ob_get_contents();
+        ob_end_clean();
         return $html;
     }
 
     
-    private static function url_esc_spaces( $url ) {
-        return str_replace(' ', '%20', $url);
+    /**
+     * 
+     * DELETE_ENTRY
+     * 
+     * This function will remove an entry.
+     * 
+     * @return nothing 
+     * @author epstudios
+     *      
+     */
+    public static function ajax_eps_delete_entry(){
+        if( !isset($_POST['id']) ) exit();
+        
+        global $wpdb;
+        $table_name = $wpdb->prefix . "redirects";
+        $results = $wpdb->delete( $table_name, array( 'ID' => intval( $_POST['id'] ) ) );
+        echo json_encode( array( 'id' => $_POST['id']) );
+        exit();
     }
+    
     /**
      * 
      * GET_BLANK_ENTRY
@@ -300,203 +487,23 @@ class EPS_Redirects {
      *      
      */
     public static function get_blank_entry() {
-        return '<tr class="redirect-entry">
-                    <td><span class="eps-grey-text">'.get_bloginfo('home').'/&nbsp;</span><input class="eps-request-url" type="text" name="'.self::$option_slug.'[from][]" value="" > &rarr;</td>
-                    <td>'.self::get_type_select().'</td>
-                </tr>';
+        ob_start();
+        include( EPS_REDIRECT_PATH . 'templates/template.redirect-entry-empty.php');
+        $html = ob_get_contents();
+        ob_end_clean();
+        return $html;
     }
+    
     public static function ajax_get_blank_entry() {
         echo self::get_blank_entry(); exit();
     }
     
-    
-     /**
-     * 
-     * GET_TYPE_SELECT
-     * 
-     * This function will initialze a series of html form elements so a user can narrow down their redirect destination.
-     * 
-     * @return html string
-     * @author epstudios
-     *      
-     */
-    private function get_type_select(){
-        
-        // Get a list of primary destinations.
-        $post_types = get_post_types(array('public'=>true),'objects'); 
-        $html = '<select class="type-select">';
-        $html .= '<option value="eps-redirect-url" selected default>Custom</option>';
-        foreach ($post_types as $post_type ) {
-          $html .= '<option value="'.$post_type->name.'">'. $post_type->labels->singular_name. '</option>';
-        }
-        $html .= '<option value="term">Term Archive</option>';
-        $html .= '</select>';
-        
-        // The default input, javascript will populate this input with the final URL for submission.
-        $html .= '<input class="eps-redirect-url" type="text" name="'.self::$option_slug.'[to][]"  value="" placeholder="'.get_bloginfo('home').'"/>';
-        
-        // Get all the post type select boxes.
-        foreach ($post_types as $post_type )
-            $html .=  self::get_post_type_select($post_type->name);
-        
-        // Get the term select box.
-        $html .= self::get_term_archive_select();
-        return $html;
+    public function clear_cache() {
+        header("Cache-Control: no-cache, must-revalidate");
+        header("Expires: Mon, 26 Jul 1997 05:00:00 GMT");
+        header("Content-Type: application/xml; charset=utf-8");
     }
     
-    
-    
-     /**
-     * 
-     * GET_PARENT_INDEX
-     * 
-     * Scans a custom array of posts to find a parent's position in the array. Used in GET_POST_TYPE_SELECT
-     * 
-     * @return html string
-     * @param $post_type = the post type slug.
-     * @author epstudios
-     *      
-     */
-    function find_parent_index( $id, $entries ){
-        foreach($entries as $k => $entry ) {
-            if ( $entry->ID == $id ) return( $k );
-        }
-        return false;
-    }
-    /**
-     * 
-     * GET_PARENT_INDEX
-     * 
-     * Scans a custom array of posts to find a parent's position in the array. Used in GET_POST_TYPE_SELECT
-     * 
-     * @return html string
-     * @param $post_type = the post type slug.
-     * @author epstudios
-     *      
-     */
-    function get_post_depth( $id ){
-        global $wpdb;
-        $depth = 0;
-        $parent_id = $id;
-        while ($parent_id > 0) {
-            $parent_id = $wpdb->get_var( "SELECT post_parent FROM $wpdb->posts WHERE ID = $parent_id" );
-            $depth ++;
-        }
-        return $depth;
-    }
-    
-    /**
-     * 
-     * GET_POST_TYPE_SELECT
-     * 
-     * This function will output a select box with all the posts in a given post_type.
-     * Post types with archives will have an All Posts link.
-     * 
-     * @return html string
-     * @param $post_type = the post type slug.
-     * @author epstudios
-     *      
-     */
-    private function get_post_type_select( $post_type ){
-        global $wpdb;
-        $entries = $wpdb->get_results("SELECT ID, post_title, post_parent 
-                    FROM $wpdb->posts
-                    WHERE post_status = 'publish' 
-                    AND post_type = '$post_type' 
-                    ORDER BY  post_title ASC"); 
-                    
-                    
-        if (!$entries) return false;
-
-        // create heirarchy
-        
-        // get depths
-        $max_depth = 0;
-        foreach($entries as $k => $entry ) {
-            $entry->depth = self::get_post_depth( $entry->post_parent );
-            if($entry->depth > $max_depth)  $max_depth = $entry->depth;
-        }
-        
-        // Nest arrays as parent >> children
-        for( $i = $max_depth; $i >= 0; $i -- ) {
-            foreach( $entries as $k => $entry ) {
-                if ( $entry->depth == $i ) {
-                    if ( $entry->post_parent > 0 ) {
-                    $entry->post_title = '&nbsp;' . str_repeat("-", $depth). ' ' . $entry->post_title;
-                    $parent_index = self::find_parent_index( $entry->post_parent, $entries );
-                    
-                    $entries[$parent_index]->children[] = $entry;
-                    unset($entries[$k]);
-                    }
-                }
-            }
-        }
-
-        // Start the select.
-        $html = '<select class="'.$post_type.' url-selector" style="display:none;">';
-        $html .= '<option value="" selected default>...</option>';
-        
-        // Get the correct archive link
-        switch( $post_type ) {
-            case 'post': break; // no archive
-            case 'page': break; // no archive
-            case 'attachment': break; // no archive
-            default:
-                $html .= '<option value="'.get_post_type_archive_link($post_type).'">All '.eps_prettify($post_type).'s</option>';
-        }
-
-        
-        // Get all entries and insert them as options.
-        foreach ($entries as $entry ) {
-           $html .= self::do_post_heirarchy_selects( $entry );
-        }
-        $html .= '</select>';
-        return $html;
-    }
-    
-    function do_post_heirarchy_selects( $entry ) {
-         $html .= '<option value="'.get_permalink($entry->ID).'">'. str_repeat("-", $entry->depth) . $entry->post_title . '</option>';
-            
-            if(  isset( $entry->children ) && !empty(  $entry->children ) ) {
-                foreach ($entry->children as $child ) {
-                    $html .= self::do_post_heirarchy_selects($child);
-                }
-            }
-        return $html;
-    }
-    
-    /**
-     * 
-     * GET_TERM_ARCHIVE_SELECT
-     * 
-     * This function will output a select box with all the taxonomies and terms.
-     * 
-     * @return html string
-     * @author epstudios
-     *      
-     */
-    private function get_term_archive_select(){
-        $taxonomies = get_taxonomies( '', 'objects' );
-        
-        if (!$taxonomies) return false;
-        
-        // Start the select.
-        $html = '<select class="term url-selector" style="display:none;">';
-        $html .= '<option value="" selected default>...</option>';
-        
-        // Loop through all taxonomies.
-        foreach ($taxonomies as $tax ) {
-            $terms = get_terms( $tax->name, array('hide_empty' => false) ); // show empty terms.
-            $html .= '<option value="'.get_permalink($entry->ID).'" disabled>'. $tax->labels->singular_name. '</option>';
-            
-            // Loop through all terms in this taxonomy and insert them as options.
-            foreach($terms as $term)
-                $html .= '<option value="'.get_term_link($term).'">&nbsp;&nbsp;- '. $term->name. '</option>';
-            
-        }
-        $html .= '</select>';
-        return $html;
-    }
     
     /**
      * 
@@ -511,69 +518,11 @@ class EPS_Redirects {
         echo '<script>var eps_redirect_ajax_url = "'. admin_url( 'admin-ajax.php' ) . '"</script>';
     }
     
-    
-    public static function filter_from( $string ) {
-        $string = esc_attr($string);
-        // If string does not start with a slash, add it
-        if( substr($string, 0, 1) != '/') $string = '/' . $string;
-        
-        return $string;
+    public function activation_error() {
+        file_put_contents(EPS_REDIRECT_PATH. '/error_activation.html', ob_get_contents());
     }
     
-    
-    /**
-     * 
-     * 
-     * 
-     * Get the testing results for this redirect.
-     * 
-     */
-    private function get_testing_results($from, $to) {
-        $settings = get_option( 'eps_redirect_settings' );
-        $test_urls = $settings['test_urls'];
-        if( isset($test_urls) && $test_urls == 'on' ) {
-            
-                $redirect_response_code = self::get_response( self::format_from_url( $from ) );
-                $redirect_class = ( $redirect_response_code == 301 ) ? 'valid' : 'invalid';
-                
-                $destination_response_code = self::get_response( self::url_esc_spaces( $to ) );
-                $destination_class = ( $destination_response_code == 200 ) ? 'valid' : 'invalid';
-                
-                return '<span class="eps-text-link eps-notification-area '.$redirect_class.'">'.eps_prettify($redirect_response_code).'</span> &rarr;
-                          <span class="eps-text-link eps-notification-area '.$destination_class.'">'.eps_prettify($destination_response_code).'</span>';
-        }  
-    }
-    /**
-     * 
-     * 
-     * Gets the status code for this url.
-     * 
-     */
-    private static function get_response( $url ) {
-        // returns int responsecode, or false (if url does not exist or connection timeout occurs)
-        // NOTE: could potentially take up to 0-30 seconds , blocking further code execution (more or less depending on connection, target site, and local timeout settings))
-        
-        if( !$url || !is_string($url)) return false;
-
-        $ch = @curl_init($url);
-        
-        if($ch === false) return false;
-
-        @curl_setopt($ch, CURLOPT_HEADER         ,true);    // we want headers
-        @curl_setopt($ch, CURLOPT_NOBODY         ,true);    // dont need body
-        @curl_setopt($ch, CURLOPT_RETURNTRANSFER ,true);    // catch output (do NOT print!)
-        @curl_exec($ch);
-
-        if( @curl_errno($ch) ) {   // should be 0
-            @curl_close($ch);
-            return false;
-        } else {
-            $code = @curl_getinfo($ch, CURLINFO_HTTP_CODE); 
-            @curl_close($ch);
-            return $code;
-        }
-        
-    }
+  
 }
 
 
@@ -585,8 +534,18 @@ class EPS_Redirects {
  * @param $string = the object to prettify; Typically a string.
  * @author epstudios
  */
+if( !function_exists('eps_prettify')) {
 function eps_prettify( $string ) {
     return ucwords( str_replace("_"," ",$string) );
+}
+}
+
+if( !function_exists('eps_view')) {
+function eps_view( $object ) {
+    echo '<pre>';
+    print_r($object);
+    echo '</pre>';   
+}
 }
 
 
