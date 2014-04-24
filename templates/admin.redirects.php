@@ -1,43 +1,36 @@
 <?php
 /**
  * 
- * EPS OPENGRAPH
+ * EPS 301 Redirects.
+ * 
+ * Admin.redirects.php
+ * 
+ * Outputs the redirects table.
  * 
  * 
- * 
- * This plugin creates opengrah data for pages, posts and custom post types.
- * 
- * PHP version 5
  *
  *
  * @package    EPS 301 Redirects
  * @author     Shawn Wernig ( shawn@eggplantstudios.ca )
- * @version    1.3.4
+ * @version    2.1.0
  */
 ?>
-<div id="eps-redirect-redirects-pane" class="eps-tab">
 
-<form method="post" action="">
-    <table id="eps-redirect-entries">
-        <tr class="redirect-entry">
-            <th>Status</th>
+<div id="eps-redirect-redirects-pane" class="eps-tab group">
+    <table id="eps-redirect-entries" class="eps-table eps-table-striped">
+        <tr>
             <th>Request URL</th>
             <th>Redirect To</th>
-            <th>Hits</th>
-            <th>Actions</th>
-        </tr>        <?php
-        echo self::do_inputs();
-        echo self::get_blank_entry();
-        ?>
-        <tr><td colspan="3"><a class="eps-text-link new" href="#" id="eps-redirect-add">+ Add Empty</a></td></tr>
-    </table>
-    <hr class="eps-divider">
-    <p class="submit">
-        <?php wp_nonce_field('eps_redirect_nonce', 'eps_redirect_nonce_submit');   ?>
-        <input type="submit" name="eps_redirect_refresh" id="submit" class="button button-secondary" value="Refresh Cache"/>&nbsp;&nbsp;
-        <input type="submit" name="eps_redirect_submit" id="submit" class="button button-primary" value="Save Changes"/>
-        <p><small class="eps-grey-text">Refresh the cache if the dropdowns are out of date.</small></p>
-    </p>
-</form>
+            <th class="redirect-hits">Hits</th>
+            <th class="redirect-actions">Actions</th>
+        </tr>
+        
+        <tr id="eps-redirect-add" style="display:none"><td colspan="4"><a href="#" id="eps-redirect-new"><span>+</span></a></td></tr>
 
+        <?php echo self::get_inline_edit_entry(); ?>
+        
+        <?php
+        echo self::do_entries();
+        ?>
+    </table>    
 </div>

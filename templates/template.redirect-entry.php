@@ -1,40 +1,37 @@
 <?php
 /**
  * 
- * EPS redirects
+ * EPS 301 Redirects.
+ * 
+ * template.redirect-entry.php
+ * 
+ * Outputs the redirect entry for review. This is not used to edit - merely to list them.
  * 
  * 
- * 
- * PHP version 5
  *
  *
  * @package    EPS 301 Redirects
  * @author     Shawn Wernig ( shawn@eggplantstudios.ca )
- * @version    1.3.4
+ * @version    2.1.0
  */
+
+ 
+$query_args = array( 'page' => self::$page_slug, 'delete_redirect' => esc_attr( $redirect->id ) );
 
 
 ?>
-<tr class="redirect-entry <?php echo $redirect->status; ?> id-<?php echo $redirect->id; ?>">
-    <td><span>
-        <select name="redirect[status][]" class="simple">
-            <option value="301"   <?php echo ( $redirect->status == '301' ) ? 'selected="selected"' : null; ?>>301</option>
-            <option value="302"   <?php echo ( $redirect->status == '302' ) ? 'selected="selected"' : null; ?>>302</option>
-            <option value="inactive" <?php echo ( $redirect->status == 'inactive' ) ? 'selected="selected"' : null; ?>>Off</option>
-        </select>
-        </span>
+<tr class="redirect-entry <?php  echo esc_attr( $redirect->status ); ?> id-<?php echo esc_attr( $redirect->id ); ?>" data-id="<?php echo esc_attr( $redirect->id ); ?>">
+    <td>
+        <a target="_blank" class="eps-url" href="<?php bloginfo('url'); ?>/<?php echo esc_attr($dfrom); ?>" title="<?php bloginfo('url'); ?>/<?php echo esc_attr($dfrom); ?>">
+            <span class="eps-url-root eps-url-startcap"><?php echo ($redirect->status == 'inactive' ) ? 'OFF': esc_attr($redirect->status); ?></span><span class="eps-url-root"><?php bloginfo('url'); ?>/</span><span class="eps-url-fragment eps-url-endcap"><?php echo esc_attr($dfrom); ?></span>
+        </a>
     </td>
     <td>
-        <span class="eps-grey-text"><small><?php bloginfo('home'); ?>/&nbsp;</small></span>
-        <input class="eps-request-url" type="text" name="redirect[url_from][]" value="<?php echo $dfrom; ?>" >
+        <?php echo eps_get_destination( $redirect ); ?>
     </td>
-    <td>
-        <?php echo eps_get_selector( $redirect ); ?>
-    </td>
-    <td class="text-center"><strong><?php echo $redirect->count; ?></strong></td>
+    <td class="redirect-hits"><strong><?php echo esc_attr( $redirect->count ); ?></strong></td>
     <td class="redirect-actions">
-        <input type="hidden" class="redirect-id" name="redirect[id][]"  value="<?php echo $redirect->id; ?>" >
-        <a class="eps-text-link test" href="<?php echo self::format_from_url( $redirect->url_from ); ?>" target="_blank">Test</a>
-        <a class="eps-text-link remove eps-redirect-remove" href="#" class="">&times;</a>
+        <a class="button eps-redirect-edit" href="#eps-redirect-edit" data-id="<?php echo esc_attr( $redirect->id ); ?>">Edit</a>
+        <a class="button eps-redirect-remove" href="<?php echo add_query_arg( $query_args, admin_url( '/options-general.php' ) ); ?>" data-id="<?php echo esc_attr( $redirect->id ); ?>">&times;</a>
     </td>
 </tr>

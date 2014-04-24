@@ -1,19 +1,21 @@
 <?php
 /**
  * 
- * EPS OPENGRAPH
+ * EPS 301 Redirects.
+ * 
+ * Admin.php
+ * 
+ * Outputs the admin page - and includes the tabs.
  * 
  * 
- * 
- * This plugin creates opengrah data for pages, posts and custom post types.
- * 
- * PHP version 5
  *
  *
  * @package    EPS 301 Redirects
  * @author     Shawn Wernig ( shawn@eggplantstudios.ca )
- * @version    1.3.4
+ * @version    2.1.0
  */
+ 
+ 
 global $wp_rewrite; 
 
 ?>
@@ -42,7 +44,8 @@ global $wp_rewrite;
             </div>
         
         </div>
-        <div id="donate-box">
+        
+        <div id="donate-box" class="eps-panel">
             <div class="eps-padding">
             <p>Comments, questions, bugs and feature requests can be sent to: <a href="mailto:plugins@eggplantstudios.ca">plugins@eggplantstudios.ca</a></p>
             <hr>
@@ -57,6 +60,26 @@ global $wp_rewrite;
             </form>
             </div>
         </div>
+        <div class="left">
+        <div class="eps-panel eps-margin-top">
+            <form method="post" action="" class="eps-padding" enctype="multipart/form-data">
+                <?php wp_nonce_field('eps_redirect_nonce', 'eps_redirect_nonce_submit'); ?>
+                <input accept="csv" type="file" name="eps_redirect_upload_file" value="">
+                <input type="submit" name="eps_redirect_upload" id="submit" class="button button-secondary" value="Upload CSV"/>
+                <br><small class="eps-grey-text">Supply Columns: <strong>Status</strong> (301,302,inactive), <strong>Request URL</strong>, <strong>Redirect To</strong> (ID or URL).</small>
+            </form>
+        </div>
+        
+        <div class="eps-panel left eps-margin-top">
+            <form method="post" action="" class="eps-padding">
+                <?php wp_nonce_field('eps_redirect_nonce', 'eps_redirect_nonce_submit');   ?>
+                <input type="submit" name="eps_redirect_refresh" id="submit" class="button button-secondary" value="Refresh Cache"/>
+                <br><small class="eps-grey-text">Refresh the cache if the dropdowns are out of date.</small>
+            </form>
+        </div>
+        </div>
+    
+        
 </div>
     
     

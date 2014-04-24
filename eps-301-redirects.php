@@ -15,7 +15,7 @@
  *
  * @package    EPS 301 Redirects
  * @author     Shawn Wernig ( shawn@eggplantstudios.ca )
- * @version    2.0.1
+ * @version    2.1.1
  */
 
 
@@ -25,7 +25,7 @@
 Plugin Name: Eggplant 301 Redirects
 Plugin URI: http://www.eggplantstudios.ca
 Description: Create your own 301 redirects using this powerful plugin.
-Version: 2.0.1
+Version: 2.1.1
 Author: Shawn Wernig http://www.eggplantstudios.ca
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
@@ -33,7 +33,7 @@ License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
 define ( 'EPS_REDIRECT_PATH', plugin_dir_path(__FILE__) );
 define ( 'EPS_REDIRECT_URL', plugin_dir_url( __FILE__ ) );
-define ( 'EPS_REDIRECT_VERSION', '2.0.1');
+define ( 'EPS_REDIRECT_VERSION', '2.1.1');
 
 register_activation_hook(__FILE__, array('EPS_Redirects', 'eps_redirect_activation'));
 register_deactivation_hook(__FILE__, array('EPS_Redirects', 'eps_redirect_deactivation'));
@@ -43,10 +43,10 @@ include(EPS_REDIRECT_PATH.'class.drop-down-pages.php');
 
 class EPS_Redirects {
     
-    static $option_slug = 'eps_redirects';
+    static $option_slug         = 'eps_redirects';
     static $option_section_slug = 'eps_redirects_list';
-    static $page_slug = 'eps_redirects';
-    static $page_title = '301 Redirects';
+    static $page_slug           = 'eps_redirects';
+    static $page_title          = '301 Redirects';
 
 
 
@@ -59,19 +59,29 @@ class EPS_Redirects {
      */
     public function __construct(){
         if(is_admin()){
-            add_action('activated_plugin', array($this,'activation_error'));
-            add_action('admin_menu', array($this, 'add_plugin_page'));
-            add_action('admin_init', array($this, '_save'));
-            add_action('init', array($this, 'enqueue_resources'));
-            add_action('admin_footer_text',  array($this, 'set_ajax_url'));
+            
+            // actions
+            add_action('activated_plugin',      array($this,'activation_error'));
+            add_action('admin_menu',            array($this, 'add_plugin_page'));
+            add_action('admin_init',            array($this, '_save'));
+            add_action('init',                  array($this, 'enqueue_resources'));
+            add_action('admin_footer_text',     array($this, 'set_ajax_url'));
             
             // Ajax funcs
-            add_action('wp_ajax_eps_redirect_get_new_entry',  array($this, 'ajax_get_blank_entry') ); 
-            add_action('wp_ajax_eps_redirect_delete_entry',  array($this, 'ajax_eps_delete_entry') );
+            add_action('wp_ajax_eps_redirect_get_new_entry',            array($this, 'ajax_get_entry') ); 
+            add_action('wp_ajax_eps_redirect_delete_entry',             array($this, 'ajax_eps_delete_entry') );
+            add_action('wp_ajax_eps_redirect_get_inline_edit_entry',    array($this, 'ajax_get_inline_edit_entry') ); 
+            add_action('wp_ajax_eps_redirect_save',                     array($this, 'ajax_save_redirect') ); 
+            
             
             if( isset($_GET['page']) && $_GET['page'] == self::$page_slug) {
                 add_action('admin_init', array($this, 'clear_cache'));
             }
+            
+            if( isset($_GET['delete_redirect']) && is_numeric( $_GET['delete_redirect'] ) ) {
+                self::_delete( $_GET['delete_redirect'] );
+            }
+            
         } else {
             add_action('init', array($this,'do_redirect'), 1); // Priority 1 for redirects.
         }
@@ -141,14 +151,14 @@ class EPS_Redirects {
                     'id'        => false,
                     'url_to'    => urldecode($to),
                     'url_from'  => $from,
-                    'type'    => 'url',
+                    'type'      => 'url',
                     'status'    => '301'
                 );       
         }
 
         self::_save_redirects( $new_redirects );
             
-        //update_option( self::$option_slug, null );
+        //update_option( self::$option_slug, null ); // This would delete all old redirects. Lets leave them be.
     }
     
     /**
@@ -195,6 +205,7 @@ class EPS_Redirects {
         wp_enqueue_script('jquery');
         wp_enqueue_script('eps_redirect_script', EPS_REDIRECT_URL .'js/scripts.js');
         wp_enqueue_style('eps_redirect_styles', EPS_REDIRECT_URL .'css/eps_redirect.css');
+        add_thickbox();
     }
     
     /**
@@ -232,12 +243,13 @@ class EPS_Redirects {
             $from = urldecode( $redirect->url_from );
             $to   = ($redirect->type == "url" && !is_numeric( $redirect->url_to )) ? urldecode($redirect->url_to) : get_permalink( $redirect->url_to );
                                 
+                                
                 if( $redirect->status != 'inactive' && rtrim( trim($url_request),'/')  === self::format_from_url( trim($from) )  ) {
                     // Match, this needs to be redirected
                     //increment this hit counter.
                     self::increment_field($redirect->id, 'count');
                     
-                    if( $redirect->status == '301' ) {
+                    if( $redirect->status        == '301' ) {
                         header ('HTTP/1.1 301 Moved Permanently');
                     } elseif ( $redirect->status == '302' ) {
                         header ('HTTP/1.1 301 Moved Temporarily');
@@ -304,20 +316,89 @@ class EPS_Redirects {
      *      
      */
     public function _save(){
+       // Upload a CSV
+       if( isset($_POST['eps_redirect_upload']) && wp_verify_nonce( $_POST['eps_redirect_nonce_submit'], 'eps_redirect_nonce') ) {
+            self::_upload();
+        }
        
        // Refresh the Transient Cache
        if ( isset( $_POST['eps_redirect_refresh'] ) && wp_verify_nonce( $_POST['eps_redirect_nonce_submit'], 'eps_redirect_nonce') )  {
            $post_types = get_post_types(array('public'=>true), 'objects');
-            foreach ($post_types as $post_type ) {
+           foreach ($post_types as $post_type ) {
                 $options = eps_dropdown_pages( array('post_type'=>$post_type->name ) );
                 set_transient( 'post_type_cache_'.$post_type->name, $options, HOUR_IN_SECONDS );
            }
        }
        
        // Save Redirects
-       if ( isset( $_POST['eps_redirect_submit'] ) && wp_verify_nonce( $_POST['eps_redirect_nonce_submit'], 'eps_redirect_nonce') ) 
+       if ( isset( $_POST['eps_redirect_submit'] ) && wp_verify_nonce( $_POST['eps_redirect_nonce_submit'], 'eps_redirect_nonce') ) {
             $this->_save_redirects( self::_parse_serial_array($_POST['redirect']) );
+       }
 
+    }
+
+    /**
+     * 
+     * _UPLOAD
+     * 
+     * This function handles the upload of CSV files.
+     * 
+     * @return html string
+     * @author epstudios
+     *      
+     */
+    private function _upload() {
+        $new_redirects = array();
+        $mimes = array('application/vnd.ms-excel','text/plain','text/csv','text/tsv');
+
+        if( !in_array($_FILES['eps_redirect_upload_file']['type'], $mimes) ) {
+            add_action( 'admin_notices', array($this, 'admin_notice_bad_csv') );
+            return false;
+        }
+        
+        // open the fule.        
+        if (($handle = fopen($_FILES['eps_redirect_upload_file']['tmp_name'], "r")) !== FALSE) {
+            
+            while (($redirect = fgetcsv($handle, 1000, ",")) !== FALSE) {
+                $args = count($redirect);
+                
+                
+                if( $args > 4 || $args < 3 ) {
+                    // Bad line. Too many/few arguments.
+                    add_action( 'admin_notices', array($this, 'admin_notice_bad_csv_entry') );
+                    continue; 
+                }
+                
+                switch( strtolower( $redirect[0] ) ) {
+                    case '302': $status = 302; break;
+                    case 'off': 
+                    case 'no': 
+                    case 'inactive': $status = 'inactive'; break;
+                    default: $status = 301; break;
+                }
+                
+                // new redirect!
+                $new_redirect = array(
+                    'id'        => false, // new
+                    'url_from'  => $redirect[1],
+                    'url_to'    => $redirect[2],
+                    'type'      => ( is_numeric( $redirect[2] ) ) ? 'post' : 'url',
+                    'status'    => $status,
+                    'count'     => ( isset( $redirect[3] ) && is_numeric( $redirect[3] ) ) ? $redirect[3] : 0
+                    ); 
+                
+                array_push($new_redirects, $new_redirect);
+            
+            }
+            fclose($handle); // close file.
+        }
+
+        if( $new_redirects ) {
+            self::_save_redirects( $new_redirects );
+            add_action( 'admin_notices', array($this, 'admin_notice_upload_success') );
+        } else {
+            add_action( 'admin_notices', array($this, 'admin_notice_upload_error') );           
+        }
     }
     
     /**
@@ -342,10 +423,52 @@ class EPS_Redirects {
                     'url_from'  => $array['url_from'][$i],
                     'url_to'    => $array['url_to'][$i],
                     'type'      => ( is_numeric($array['url_to'][$i]) ) ? 'post' : 'url',
-                    'status'    => isset( $array['status'][$i] ) ? $array['status'][$i] : 'active'
+                    'status'    => isset( $array['status'][$i] ) ? $array['status'][$i] : '301'
                     ); 
         }
         return $new_redirects;
+    }
+    /**
+     * 
+     * AJAX SAVE REDIRECTS
+     * 
+     * Saves a single redirectvia ajax.
+     * 
+     * TODO: Maybe refactor this to reduce the number of queries.
+     * 
+     * @return nothing
+     * @author epstudios
+     */
+    public function ajax_save_redirect() {
+              
+        $update = array(
+                'id'        => ( $_POST['id'] ) ? $_POST['id'] : false,
+                'url_from'  => $_POST['url_from'], // remove the $root from the url if supplied, and a leading /
+                'url_to'    => $_POST['url_to'],
+                'type'      => ( is_numeric($_POST['url_to']) ? 'post' : 'url' ),
+                'status'    => $_POST['status']
+            );
+        
+        $ids = self::_save_redirects( array( $update ) );
+
+        $updated_id = $ids[0]; // we expect only one returned id.
+        
+        // now get the new entry...
+        $redirect = self::get_redirect( $updated_id );
+        $html = '';
+
+        ob_start();
+            $dfrom = urldecode($redirect->url_from);
+            $dto   = urldecode($redirect->url_to  );
+            include( EPS_REDIRECT_PATH . 'templates/template.redirect-entry.php');
+            $html = ob_get_contents();
+        ob_end_clean();
+        echo json_encode( array(
+            'html'          => $html,
+            'redirect_id'   => $updated_id
+        ));
+        
+        exit();
     }
     
     /**
@@ -363,35 +486,50 @@ class EPS_Redirects {
        if( empty( $array ) ) return false;
        global $wpdb;
        $table_name = $wpdb->prefix . "redirects";
+       $root = get_bloginfo('url') . '/';  
+       $ids = array();
+       
        
        foreach( $array as $redirect ) {
+           
             if( !$redirect['id'] || empty($redirect['id']) ) {
                 // new
+                $entry = array( 
+                        'url_from'      => trim( ltrim( str_replace($root, null, $redirect['url_from']), '/' ) ),
+                        'url_to'        => trim( $redirect['url_to'] ),
+                        'type'          => trim( $redirect['type'] ),
+                        'status'        => trim( $redirect['status'] )
+                    );
+                // Add count if exists:
+                if( isset( $redirect['count'] ) && is_numeric( $redirect['count'] ) ) $entry['count'] = $redirect['count'];
+                    
                 $wpdb->insert( 
                     $table_name, 
-                    array( 
-                        'url_from'      => trim( $redirect['url_from'] ),
-                        'url_to'        => trim( $redirect['url_to']),
-                        'type'          => trim( $redirect['type']),
-                        'status'        => trim( $redirect['status'])
-                    )
+                    $entry
                 );
-
+                 $ids[] = $wpdb->insert_id;
             } else {
                 // existing
+                $entry = array( 
+                        'url_from'  => trim( ltrim( str_replace($root, null, $redirect['url_from']), '/' ) ),
+                        'url_to'    => trim( $redirect['url_to'] ),
+                        'type'      => trim( $redirect['type'] ), 
+                        'status'    => trim( $redirect['status'] )
+                    );
+                // Add count if exists:
+                if( isset( $redirect['count'] ) && is_numeric( $redirect['count'] ) ) $entry['count'] = $redirect['count'];
+                
                 $wpdb->update( 
                     $table_name, 
-                    array( 
-                        'url_from'  => trim( $redirect['url_from']),
-                        'url_to'    => trim( $redirect['url_to']),
-                        'type'      => trim( $redirect['type']), 
-                        'status'    => trim( $redirect['status'])
-                    ), 
+                    $entry, 
                     array( 'id' => $redirect['id'] )
                 );
+                
+                $ids[] = $redirect['id'];
             }
             
         }
+        return $ids; // return array of affected ids.
         
     }
     /**
@@ -407,9 +545,17 @@ class EPS_Redirects {
         global $wpdb;
         $table_name = $wpdb->prefix . "redirects";
         $results = $wpdb->get_results( 
-            "SELECT * FROM $table_name " . ( ( $active_only ) ? "WHERE status != 'inactive'" : null )
+            "SELECT * FROM $table_name " . ( ( $active_only ) ? "WHERE status != 'inactive'" : null ) . " ORDER BY id DESC"
         );
         return $results;
+    }
+    public function get_redirect( $redirect_id ) {
+        global $wpdb;
+        $table_name = $wpdb->prefix . "redirects";
+        $results = $wpdb->get_results( 
+            "SELECT * FROM $table_name WHERE id = " . intval($redirect_id) . " LIMIT 1"
+        );
+        return array_shift($results);
     }
     
     /**
@@ -439,7 +585,7 @@ class EPS_Redirects {
      * @author epstudios
      *      
      */
-    public function do_inputs(){
+    public function do_entries(){
         $redirects = self::get_redirects( );
         $html = '';
         if (empty($redirects)) return false;
@@ -474,11 +620,17 @@ class EPS_Redirects {
         echo json_encode( array( 'id' => $_POST['id']) );
         exit();
     }
+    private static function _delete( $id ){
+        global $wpdb;
+        $table_name = $wpdb->prefix . "redirects";
+        $wpdb->delete( $table_name, array( 'ID' => intval( $id ) ) );
+    }
     
     /**
      * 
-     * GET_BLANK_ENTRY
-     * AJAX_GET_BLANK_ENTRY
+     * GET_ENTRY
+     * AJAX_GET_ENTRY
+     * GET_EDIT_ENTRY
      * 
      * This function will return a blank row ready for user input.
      * 
@@ -486,16 +638,40 @@ class EPS_Redirects {
      * @author epstudios
      *      
      */
-    public static function get_blank_entry() {
+    public static function get_entry( $redirect_id = false ) {
         ob_start();
-        include( EPS_REDIRECT_PATH . 'templates/template.redirect-entry-empty.php');
+        ?>
+        <tr class="id-<?php echo ($redirect_id) ? $redirect_id : 'new'; ?>">
+            <?php include( EPS_REDIRECT_PATH . 'templates/template.redirect-entry-edit.php'); ?>
+        </tr>
+        <?php
         $html = ob_get_contents();
         ob_end_clean();
         return $html;
     }
     
-    public static function ajax_get_blank_entry() {
-        echo self::get_blank_entry(); exit();
+    public static function get_inline_edit_entry($redirect_id = false) {
+        include( EPS_REDIRECT_PATH . 'templates/template.redirect-entry-edit-inline.php');
+    }
+    
+    public static function ajax_get_inline_edit_entry() {
+        
+        $redirect_id = isset( $_REQUEST['redirect_id'] ) ? intval( $_REQUEST['redirect_id'] ) : false;
+        
+        ob_start();
+        self::get_inline_edit_entry($redirect_id);
+        $html = ob_get_contents();
+        ob_end_clean();
+        echo json_encode( array( 
+            'html' => $html,
+            'redirect_id' => $redirect_id
+        ));
+        exit();
+    }
+    
+    
+    public static function ajax_get_entry() {
+        echo self::get_entry(); exit();
     }
     
     public function clear_cache() {
@@ -505,6 +681,7 @@ class EPS_Redirects {
     }
     
     
+  
     /**
      * 
      * SET_AJAX_URL
@@ -518,12 +695,53 @@ class EPS_Redirects {
         echo '<script>var eps_redirect_ajax_url = "'. admin_url( 'admin-ajax.php' ) . '"</script>';
     }
     
+    
+    
     public function activation_error() {
         file_put_contents(EPS_REDIRECT_PATH. '/error_activation.html', ob_get_contents());
     }
     
   
+    /**
+     * 
+     * NOTICES
+     * 
+     * This function will output a variable containing the admin ajax url for use in javascript.
+     * 
+     * @author epstudios
+     *      
+     */
+    function admin_notice_bad_csv() {
+        ?>
+        <div class="error">
+            <p>WARNING: Not a valid CSV file! No new redirects have been added.</p>
+        </div>
+        <?php
+    }  
+    function admin_notice_upload_success() {
+        ?>
+        <div class="updated">
+            <p>SUCCCESS: New redirects have been added.</p>
+        </div>
+        <?php
+    }  
+    function admin_notice_upload_error() {
+        ?>
+        <div class="updated">
+            <p>WARNING: Something's up. No new redirects were added, please review your CSV file.</p>
+        </div>
+        <?php
+    }
+    function admin_notice_bad_csv_entry() {
+        ?>
+        <div class="error">
+            <p>WARNING: Encountered a bad Redirect entry in your CSV file.</p>
+        </div>
+        <?php
+    }  
 }
+
+
 
 
 

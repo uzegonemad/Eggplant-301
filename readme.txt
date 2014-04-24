@@ -4,7 +4,7 @@ Donate link: none
 Tags: 301 redirects, redirects
 Requires at least: 3.0.1
 Tested up to: 3.8.1
-Stable tag: 2.0.1
+Stable tag: 2.1.1
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -59,7 +59,12 @@ EPS 301 Redirects requires that you use anything but the default permalink struc
 
 = My redirects aren't working =
 
-This could be caused by many things, but please ensure that you are supplying valid URLs. Most common are extra spaces, spelling mistakes and invalid characters.
+This could be caused by many things, but please ensure that you are supplying valid URLs. Most common are extra spaces, extra slashes, spelling mistakes and invalid characters.
+
+
+= My redirects aren't working - the old .html page still shows =
+For this plugin to work, the page must be within the Wordpress environment. If you are redirecting older .html or .php files, you must first delete them. The plugin can’t redirect if the file still exists, sorry! You should look into .htaccess redirects if you want to keep these files on your server.
+
 
 
 = My redirects aren't getting the 301 status code =
@@ -72,6 +77,10 @@ Your Request or Redirect URLS may be incorrect; please ensure that you are suppl
 Click the small X beside the redirect you wish to remove. Save changes.
 
 
+= How do I add wildcards. or folder redirects? =
+
+Unfortunately this is not supported. You should look into .htaccess redirects for these advanced features.
+
 
 
 
@@ -82,6 +91,10 @@ Click the small X beside the redirect you wish to remove. Save changes.
 3. The redirect testing feature. 
 
 == Changelog ==
+
+= 2.1.1 =
+Fixed an issue where users with a lot of redirects were being limited, this fix also changed up the admin area. Redirects are now editable via AJAX, and the ‘add new’ form was moved to the top.
+
 
 = 2.0.1 =
 Fixed an issue where the Automatic Update would not call the import process for pre 2.0 versions.
@@ -120,6 +133,10 @@ Overhauled the entire plugin. Redirects are stored in their own table. Gracefull
 * Release.
 
 == Upgrade Notice ==
+
+= 2.1.1 =
+Fixed an issue where users with a lot of redirects were being limited, this fix also changed up the admin area. Redirects are now editable via AJAX, and the ‘add new’ form was moved to the top.
+
 
 = 2.0.1 =
 Fixed an issue where the Automatic Update would not call the import process for pre 2.0 versions.

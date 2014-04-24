@@ -7,8 +7,10 @@
  * @since 2.1.0
  *
  * @param array|string $args Optional. Override default arguments.
- * @return string HTML content, if not displaying.
+ * @return string or HTML content, if not displaying.
  */
+ 
+ 
 if( !function_exists('eps_dropdown_pages')) {
 function eps_dropdown_pages($args = '') {
     $defaults = array(
