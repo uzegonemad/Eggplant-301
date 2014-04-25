@@ -4,7 +4,7 @@ Donate link: none
 Tags: 301 redirects, redirects
 Requires at least: 3.0.1
 Tested up to: 3.8.1
-Stable tag: 2.1.1
+Stable tag: 2.1.2
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -92,6 +92,9 @@ Unfortunately this is not supported. You should look into .htaccess redirects fo
 
 == Changelog ==
 
+= 2.1.2 =
+Minor bug fixes.
+
 = 2.1.1 =
 Fixed an issue where users with a lot of redirects were being limited, this fix also changed up the admin area. Redirects are now editable via AJAX, and the ‘add new’ form was moved to the top.
 
@@ -133,6 +136,9 @@ Overhauled the entire plugin. Redirects are stored in their own table. Gracefull
 * Release.
 
 == Upgrade Notice ==
+
+= 2.1.2 =
+Minor bug fixes.
 
 = 2.1.1 =
 Fixed an issue where users with a lot of redirects were being limited, this fix also changed up the admin area. Redirects are now editable via AJAX, and the ‘add new’ form was moved to the top.

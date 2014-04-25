@@ -30,8 +30,7 @@ function eps_get_selector( $redirect = false ) {
     $current_post = ( isset( $redirect->url_to ) && is_numeric( $redirect->url_to ) ) ? get_post( intval( $redirect->url_to ) ) : null;
     
     $post_types = get_post_types(array(
-        'public'                => true,
-        'publicly_queryable'    => true
+        'public'                => true
         ), 'objects');
 
     $html = eps_get_type_select($post_types, $current_post);
