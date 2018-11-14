@@ -69,6 +69,11 @@ class EPS_Walker_PageDropdown extends Walker {
 
     function start_el(&$output, $object, $depth = 0, $args = Array(), $current_object_id = 0)
     {
+        if(!is_array($output))
+        {
+            $output = array();
+        }
+
         $pad = str_repeat('&nbsp;', $depth * 3);
         $output[$object->ID] = $pad . esc_html( apply_filters( 'list_pages', $object->post_title, $object ) );
     }
