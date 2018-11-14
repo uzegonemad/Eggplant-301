@@ -34,6 +34,7 @@ function eps_get_selector( $redirect = false ) {
         ), 'objects');
 
     $html = eps_get_type_select($post_types, $current_post);
+
      // Get all the post type select boxes.
     foreach ($post_types as $post_type ) {
         $html .= eps_get_post_type_selects( $post_type->name, $current_post );
@@ -43,12 +44,12 @@ function eps_get_selector( $redirect = false ) {
     $html .= eps_get_term_archive_select();
     
     // The default input, javascript will populate this input with the final URL for submission.
-    $html .= '<input class="eps-url-input" 
+    $html .= '<input class="eps-url-input select-eps-url-input"
                      type="text"
                      name="redirect[url_to][]"  
                      value="'.( isset( $redirect->url_to ) ? $redirect->url_to : null ).'" 
-                     placeholder="'.get_bloginfo('home').
-                     ( ( isset( $redirect->type ) && $redirect->type != 'post' || !isset($redirect->type) ) ? null : ' style="display:none;"' ) . 
+                     placeholder="'.get_bloginfo('url').'" ' .
+                     ( ! isset($redirect->type) || ( ( isset( $redirect->type ) && $redirect->type != 'post' ) ) ? null : ' style="display:none;"' ) .
                      '" />';
 
     return $html;
@@ -182,5 +183,31 @@ function eps_get_term_archive_select(){
     }
     $html .= '</select>';
     return $html;
+}
+
+function eps_get_ordered_filter( $field, $label, $classes = array() )
+{
+    global $EPS_Redirects_Plugin;
+    $nextOrder = 'asc';
+    $arrow = false;
+
+    if( isset( $_GET['orderby'] ) &&  $_GET['orderby']==  $field )
+    {
+        $arrow = '&darr;';
+
+        if( isset( $_GET['order'] ) && $_GET['order'] != 'desc' )
+        {
+            $nextOrder = 'desc';
+            $arrow = '&uarr;';
+        }
+    }
+
+    printf(
+        '<a class="%s" href="%s">%s %s</a>',
+        implode(' ', $classes ),
+        $EPS_Redirects_Plugin->admin_url( array( 'orderby' => $field, 'order' => $nextOrder) ),
+        $label,
+        $arrow
+    );
 }
 ?>

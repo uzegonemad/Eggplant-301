@@ -1,24 +1,18 @@
 <?php
 /**
- * 
- * EPS 301 Redirects.
- * 
- * template.redirect-entry-edit-inline.php
- * 
+ *
  * Outputs the whole inline entry edit html. 
- * 
- * 
  *
  *
  * @package    EPS 301 Redirects
  * @author     Shawn Wernig ( shawn@eggplantstudios.ca )
- * @version    2.1.0
+ *
  */
 
 
 ?>
 <tr id="eps-redirect-edit">
-    <td colspan="4">
+    <td colspan="5">
         <form id="eps-redirect-save" method="post" action="">
             <table class="eps-table">
                 <tr class="id-<?php echo ($redirect_id) ? $redirect_id : 'new'; ?>">
