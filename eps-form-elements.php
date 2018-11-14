@@ -50,7 +50,7 @@ function eps_get_selector( $redirect = false ) {
                      value="'.( isset( $redirect->url_to ) ? $redirect->url_to : null ).'" 
                      placeholder="'.get_bloginfo('url').'" ' .
                      ( ! isset($redirect->type) || ( ( isset( $redirect->type ) && $redirect->type != 'post' ) ) ? null : ' style="display:none;"' ) .
-                     '" />';
+                     ' />';
 
     return $html;
 }

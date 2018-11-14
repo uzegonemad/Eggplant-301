@@ -13,7 +13,7 @@ $redirect = self::get_redirect( $redirect_id );
 
 ?>
 <td>
-    <input type="hidden" type="text" name="redirect[id][]" value="<?php echo ($redirect_id) ? $redirect_id : ''; ?>" >
+    <input type="hidden" name="redirect[id][]" value="<?php echo ($redirect_id) ? $redirect_id : ''; ?>" >
     
     <select name="redirect[status][]" class="eps-small-select">
         <option default value="301"   <?php echo ( $redirect && $redirect->status == '301' ) ? 'selected="selected"' : null; ?>>301</option>
